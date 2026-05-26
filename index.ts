@@ -425,10 +425,32 @@ const visitImportDeclaration = (node: ts.ImportDeclaration) => {
 };
 
 const visitImportCallExpression = (node: ts.CallExpression) => {
-  if (pathRewriting) {
-    if (ts.isStringLiteral(node.arguments[0])) {
-      const moduleSpecifier = node.arguments[0];
+  if (ts.isStringLiteral(node.arguments[0])) {
+    const moduleSpecifier = node.arguments[0];
 
+    if (imports) {
+      const match = imports.find(([alias]) =>
+        moduleSpecifier.text.startsWith(alias)
+      );
+
+      if (match) {
+        let replacement = match[1];
+
+        // relative path: non absolute path that's not an @alias
+        if (!isAbsolute(replacement) && replacement.startsWith(".")) {
+          replacement = relative(dirname(filePath), replacement) +
+            (replacement.endsWith("/") ? "/" : "");
+        }
+
+        transformSpecifiers.push({
+          pos: moduleSpecifier.pos,
+          alias: new RegExp("(['\"])" + RegExp.escape(match[0])),
+          replacement,
+        });
+      }
+    }
+
+    if (pathRewriting) {
       sourceCode = sourceCode.slice(0, moduleSpecifier.pos) +
         `"${moduleSpecifier.text.replace(/\.ts$/, ".js")}"` +
         sourceCode.slice(moduleSpecifier.end);
